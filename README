@@ -1,0 +1,5 @@
+This toy program is just to learn Haskell.
+
+To run the program just execute:
+
+   $ runhaskell TicTacToe.hs
