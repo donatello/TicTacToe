@@ -3,23 +3,24 @@ import Data.Char (toLower)
 import Data.List (intersperse, transpose)
 import System.IO
 
-data Board = Board [[Char]]
+data Board = Board String
 
 rowSep = "--+---+--"
 
 myIntersperse :: String -> String -> String
 myIntersperse str (x:xs) = x:(concatMap (\x -> str ++ [x]) xs)
 
+getSBoard board = [take 3 board, (take 3.drop 3) board, drop 6 board] 
+
 drawBoard :: Board -> IO ()
 drawBoard (Board board) = do
-  let lines = map (myIntersperse " | ") board
+  let sboard = getSBoard board
+      lines = map (myIntersperse " | ") sboard
       flines = intersperse rowSep lines
   sequence_ $ map putStrLn flines
 
-decode n = (n `div` 3, n `rem` 3)
-
 getEmptyBoard :: Board
-getEmptyBoard = Board $ replicate 3 $ replicate 3 ' '
+getEmptyBoard = Board $ replicate 9 ' '
 
 getUserMove :: IO Int
 getUserMove = do
@@ -33,21 +34,16 @@ allequal s = (and $ map ((s!!0)==) s) && (s!!0 /= ' ')
 
 gameOver :: Board -> Bool
 gameOver (Board board) = or [hori, vert, d1, d2]
-  where hori = or $ map allequal board
-        vert = or $ map allequal $ transpose board
-        d1 = allequal $ [board !! 0 !! 0, board !! 1 !! 1, board !! 2 !! 2]
-        d2 = allequal $ [board !! 0 !! 2, board !! 1 !! 1, board !! 2 !! 0]
+  where sboard = getSBoard board
+        hori = or $ map allequal sboard
+        vert = or $ map allequal $ transpose sboard
+        d1 = allequal $ [board !! 0, board !! 4, board !! 8]
+        d2 = allequal $ [board !! 2, board !! 4, board !! 6]
 
 placeMove :: Char -> Int -> Board -> Board
-placeMove c n (Board board) = Board $ t1 ++ t2 ++ t3
-  where (rowNo, colNo) = decode n
-        t1 = take rowNo board
-        t2 = [updateRow (board !! rowNo)]
-        t3 = drop (rowNo+1) board
-        updateRow row = (take colNo row) ++ [c] ++ (drop (colNo+1) row)
+placeMove c n (Board board) = Board $ (take n board) ++ [c] ++ (drop (n+1) board)
 
-isValidMove (Board board) n = ' ' == ((board !! rn) !! cn)
-  where (rn, cn) = decode n
+isValidMove (Board board) n = ' ' == (board !! n)
 
 getValidUserMove board = do
   c <- getUserMove
