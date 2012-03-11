@@ -69,22 +69,4 @@ playGame board player mno = do
                       return ()
               else playGame nb (other player) (mno + 1)
 
-main = do
-  hSetBuffering stdin NoBuffering
-  hSetBuffering stdout NoBuffering
-  -- putStr "Do you want to play first? (Y/n) "
-  -- choice <- getChar
-  -- if toLower choice == 'n'
-  --   then undefined
-  --   else undefined
-  playGame getEmptyBoard 'x' 0
-
-
-{-
-o | o | o
---+---+--
-x | o | o
---+---+--
-x | x | x
--}
-
+main = playGame getEmptyBoard 'x' 0
