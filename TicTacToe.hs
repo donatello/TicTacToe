@@ -11,7 +11,7 @@ myIntersperse :: String -> String -> String
 myIntersperse str (x:xs) = x:(concatMap (\x -> str ++ [x]) xs)
 
 getSBoard :: String -> [String]
-getSBoard board = [take 3 board, (take 3.drop 3) board, drop 6 board] 
+getSBoard board = [take 3 board, (take 3.drop 3) board, drop 6 board]
 
 drawBoard :: Board -> IO ()
 drawBoard (Board board) = do
@@ -28,7 +28,7 @@ getUserMove = do
   u <- getLine
   if length u < 1 || filter (not.isDigit) u /= []
     then getUserMove
-    else do c <- fmap read getLine
+    else do let c = read u
             if c > 0 && c < 10
               then return (c-1)
               else getUserMove
