@@ -1,5 +1,5 @@
 
-import Data.Char (toLower)
+import Data.Char (toLower, isDigit)
 import Data.List (intersperse, transpose)
 import System.IO
 
@@ -10,6 +10,7 @@ rowSep = "--+---+--"
 myIntersperse :: String -> String -> String
 myIntersperse str (x:xs) = x:(concatMap (\x -> str ++ [x]) xs)
 
+getSBoard :: String -> [String]
 getSBoard board = [take 3 board, (take 3.drop 3) board, drop 6 board] 
 
 drawBoard :: Board -> IO ()
@@ -24,10 +25,13 @@ getEmptyBoard = Board $ replicate 9 ' '
 
 getUserMove :: IO Int
 getUserMove = do
-  c <- fmap read getLine
-  if c > 0 && c < 10
-    then return (c-1)
-    else getUserMove
+  u <- getLine
+  if length u < 1 || filter (not.isDigit) u /= []
+    then getUserMove
+    else do c <- fmap read getLine
+            if c > 0 && c < 10
+              then return (c-1)
+              else getUserMove
 
 allequal :: String -> Bool
 allequal s = (and $ map ((s!!0)==) s) && (s!!0 /= ' ')
@@ -43,14 +47,17 @@ gameOver (Board board) = or [hori, vert, d1, d2]
 placeMove :: Char -> Int -> Board -> Board
 placeMove c n (Board board) = Board $ (take n board) ++ [c] ++ (drop (n+1) board)
 
+isValidMove :: Board -> Int -> Bool
 isValidMove (Board board) n = ' ' == (board !! n)
 
+getValidUserMove :: Board -> IO Int
 getValidUserMove board = do
   c <- getUserMove
   if isValidMove board c
     then return c
     else getValidUserMove board
 
+other :: Char -> Char
 other 'x' = 'o'
 other 'o' = 'x'
 
@@ -69,4 +76,5 @@ playGame board player mno = do
                       return ()
               else playGame nb (other player) (mno + 1)
 
+main :: IO ()
 main = playGame getEmptyBoard 'x' 0
