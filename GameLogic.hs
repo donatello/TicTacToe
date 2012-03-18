@@ -8,12 +8,14 @@ module GameLogic
   isDrawn,
   placeMove,
   isValidMove,
-  other
+  other,
+  getAIMove
 )
        where
 
 import           Control.Monad.State
-import           Data.List         (intersperse, transpose)
+import           Data.List           (intersperse, transpose, findIndex)
+import           Data.Maybe          (fromJust)
 
 newtype Board = Board { getBoard :: String }
            deriving Show
@@ -72,4 +74,13 @@ other :: Char -> Char
 other 'x' = 'o'
 other 'o' = 'x'
 
+--------------------------------------------------------------------------------
+
+-- computer player
+--------------------------------------------------------------------------------
+getAIMove :: Board -> Int
+getAIMove (Board board) = fromJust $ findIndex (==' ') board
+  where xcount = length $ filter (=='x') board
+        ocount = length $ filter (=='o') board
+        aiChar = if xcount == ocount then 'x' else 'o'
 --------------------------------------------------------------------------------

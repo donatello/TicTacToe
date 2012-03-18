@@ -28,7 +28,6 @@ getNewDBoard = DBoard {
   status = InProgress
   }
 
-
 flipCursor :: State DBoard ()
 flipCursor = modify (\dboard -> if status dboard /= InProgress 
                                 then dboard { dispC = False }
@@ -79,15 +78,23 @@ makeMove dboard | isDrawn bd    = tdb' { status = Drawn }
         bd = placeMove (turn dboard) (cursor dboard) (board dboard)
         oturn = other $ turn dboard
 
+makeAIMove :: DBoard -> DBoard
+makeAIMove dboard = if status dboard == InProgress
+                    then makeMove tdboard
+                    else dboard
+  where aiMove = getAIMove (board dboard)
+        tdboard = dboard { cursor = aiMove }
+
 boardEvent :: Maybe Event -> State DBoard ()
 boardEvent event = do
   dboard <- get
   case event of
-    Just (EventCharacter 'q') -> put (dboard { status = Abandon }) >> return ()
+    Just (EventCharacter 'q') -> put (dboard { status = Abandon })
     _ -> if status dboard == InProgress
          then case event of
-           Just (EventSpecialKey key) -> modify (updateBoard key) >> return ()
-           Just (EventCharacter ' ') -> modify makeMove >> return ()
+           Just (EventSpecialKey key) -> modify (updateBoard key)
+           Just (EventCharacter ' ') -> do modify makeMove
+                                           modify makeAIMove
            _ -> return ()
          else return ()
 
@@ -111,7 +118,6 @@ drawMessages dboard = do
   forM_ (zip [rno..] messages) $ \(r, m) -> do
     moveCursor r colno
     drawText $ T.pack m
-    
   endMessage <- return $ evalState endGameMessage dboard
   moveCursor 50 40
   drawText $ T.pack endMessage
@@ -133,14 +139,38 @@ showScene w dboard = do
     _ -> do liftIO $ threadDelay $ 1000 * 100
             showScene w newBoard
 
+drawTitle :: Window -> Curses ()
+drawTitle w = updateWindow w $ do
+  moveCursor 2 30
+  drawText $ T.pack "TIC-TAC-TOE Challenge"
+  moveCursor 3 30
+  drawText $ T.pack "---------------------"
+
+promptUser :: Window -> DBoard -> Curses DBoard
+promptUser w dboard = do
+  updateWindow w $ do
+    drawBorder Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    moveCursor 5 30
+    drawText $ T.pack "Would you like to play first? (y/n)"
+  render
+  event <- getEvent w (Just 0)
+  let aiMove = getAIMove (board dboard)
+      aidboard = dboard { cursor = aiMove }
+  case event of
+    Just (EventCharacter 'y') -> return dboard
+    Just (EventCharacter 'n') -> return $ execState (modify makeMove) aidboard 
+    _ -> promptUser w dboard
+
 main :: IO ()
 main = do
   hSetBinaryMode stdin True
   hSetBuffering stdin NoBuffering
   let dboard = getNewDBoard
   runCurses $ do
-    setCBreak True
+    setEcho False
     w <- defaultWindow
     setKeypad w True
-    showScene w dboard
+    drawTitle w
+    ndboard <- promptUser w dboard
+    showScene w ndboard
   putStrLn "GoodBye!"
