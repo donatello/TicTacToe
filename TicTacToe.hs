@@ -1,80 +1,146 @@
+module Main
+       where
 
-import Data.Char (toLower, isDigit)
-import Data.List (intersperse, transpose)
-import System.IO
+import           GameLogic
+import           Control.Concurrent
+import           Control.Monad.State
+import           Control.Monad     (forM_)
+import           UI.NCurses
+import qualified Data.Text         as T
+import           System.IO
 
-data Board = Board String
+data Status = InProgress | Won | Drawn | Abandon
+            deriving (Show, Eq)
+data DBoard = DBoard {
+  cursor :: Int,
+  dispC :: Bool,
+  board :: Board,
+  turn :: Char,
+  status :: Status
+  }
 
-rowSep = "--+---+--"
+getNewDBoard :: DBoard
+getNewDBoard = DBoard {
+  cursor = 0,
+  dispC = True,
+  board = getEmptyBoard,
+  turn = 'x',
+  status = InProgress
+  }
 
-myIntersperse :: String -> String -> String
-myIntersperse str (x:xs) = x:(concatMap (\x -> str ++ [x]) xs)
 
-getSBoard :: String -> [String]
-getSBoard board = [take 3 board, (take 3.drop 3) board, drop 6 board]
+flipCursor :: State DBoard ()
+flipCursor = modify (\dboard -> if status dboard /= InProgress 
+                                then dboard { dispC = False }
+                                else dboard { dispC = not $ dispC dboard }
+                    )
 
-drawBoard :: Board -> IO ()
-drawBoard (Board board) = do
-  let sboard = getSBoard board
-      lines = map (myIntersperse " | ") sboard
-      flines = intersperse rowSep lines
-  sequence_ $ map putStrLn flines
+putCursor :: Int -> State DBoard Board
+putCursor pos = do toDisp <- fmap dispC get
+                   bd <- fmap (getBoard.board) get
+                   let c = if toDisp then "_" else [bd !! pos]
+                   return $ Board $ (take pos bd) ++ c ++ (drop (pos+1) bd)
 
-getEmptyBoard :: Board
-getEmptyBoard = Board $ replicate 9 ' '
+renderBoard :: Integer -> Integer -> DBoard -> Update ()
+renderBoard rs cs dboard = do
+  let cboard = evalState (putCursor $ cursor dboard) dboard
+      bstrings = evalState boardRep cboard
+      tr = (rs `div` 2) - 5
+      tups = zip bstrings [tr..]
+  forM_ tups $ \(line, rno) -> do
+    moveCursor rno (cs `div` 2)
+    drawText $ T.pack $ line
 
-getUserMove :: IO Int
-getUserMove = do
-  u <- getLine
-  if length u < 1 || filter (not.isDigit) u /= []
-    then getUserMove
-    else do let c = read u
-            if c > 0 && c < 10
-              then return (c-1)
-              else getUserMove
+updateCursor :: Int -> Bool -> DBoard -> DBoard
+updateCursor n dir dboard | length fh == 0 && length rh == 0 = dboard
+                          | dir = dboard { cursor = head fh } 
+                          | otherwise = dboard { cursor = head rh }
+  where cond x = isValidMove x $ board dboard
+        fh = filter cond $ [n..8] ++ [0..(n-1)]
+        rh = filter cond $ reverse $ [(n+1)..8] ++ [0..n]
 
-allequal :: String -> Bool
-allequal s = (and $ map ((s!!0)==) s) && (s!!0 /= ' ')
+updateBoard :: Key -> DBoard -> DBoard
+updateBoard key dboard =
+  let cpos = cursor dboard
+      checkPos c = (c + 9) `mod` 9
+  in case key of
+    KeyUpArrow -> updateCursor (checkPos $ cpos - (cpos `mod` 3) - 1) False dboard
+    KeyDownArrow -> updateCursor (checkPos $ cpos + 3 - (cpos `mod` 3)) True dboard
+    KeyLeftArrow -> updateCursor (checkPos $ cpos - 1) False dboard
+    KeyRightArrow -> updateCursor (checkPos $ cpos + 1) True dboard
+    _ -> dboard
 
-gameOver :: Board -> Bool
-gameOver (Board board) = or [hori, vert, d1, d2]
-  where sboard = getSBoard board
-        hori = or $ map allequal sboard
-        vert = or $ map allequal $ transpose sboard
-        d1 = allequal $ [board !! 0, board !! 4, board !! 8]
-        d2 = allequal $ [board !! 2, board !! 4, board !! 6]
+makeMove :: DBoard -> DBoard
+makeMove dboard | isDrawn bd    = tdb' { status = Drawn }
+                | isGameOver bd = tdb' { status = Won }
+                | otherwise     = tdb' { turn = oturn }
+  where tdb = dboard { board = bd }
+        tdb' = tdb { cursor = cursor $ updateCursor (cursor tdb) True tdb }
+        bd = placeMove (turn dboard) (cursor dboard) (board dboard)
+        oturn = other $ turn dboard
 
-placeMove :: Char -> Int -> Board -> Board
-placeMove c n (Board board) = Board $ (take n board) ++ [c] ++ (drop (n+1) board)
+boardEvent :: Maybe Event -> State DBoard ()
+boardEvent event = do
+  dboard <- get
+  case event of
+    Just (EventCharacter 'q') -> put (dboard { status = Abandon }) >> return ()
+    _ -> if status dboard == InProgress
+         then case event of
+           Just (EventSpecialKey key) -> modify (updateBoard key) >> return ()
+           Just (EventCharacter ' ') -> modify makeMove >> return ()
+           _ -> return ()
+         else return ()
 
-isValidMove :: Board -> Int -> Bool
-isValidMove (Board board) n = ' ' == (board !! n)
+endGameMessage :: State DBoard String
+endGameMessage = do
+  st <- fmap status get
+  winner <- fmap turn get
+  case st of
+    Won -> return $ winner:" has won the game."
+    Drawn -> return "Game is drawn :-("
+    Abandon -> return "You quitter!"
+    _ -> return ""
 
-getValidUserMove :: Board -> IO Int
-getValidUserMove board = do
-  c <- getUserMove
-  if isValidMove board c
-    then return c
-    else getValidUserMove board
+drawMessages :: DBoard -> Update ()
+drawMessages dboard = do
+  let (rno, colno) = (10, 40)
+      messages = ["'x' plays first.\n",
+                  "Arrow keys move cursor.",
+                  "Space makes a move at cursor position.",
+                  "'q' exits."]
+  forM_ (zip [rno..] messages) $ \(r, m) -> do
+    moveCursor r colno
+    drawText $ T.pack m
+    
+  endMessage <- return $ evalState endGameMessage dboard
+  moveCursor 50 40
+  drawText $ T.pack endMessage
 
-other :: Char -> Char
-other 'x' = 'o'
-other 'o' = 'x'
-
-playGame :: Board -> Char -> Int -> IO ()
-playGame board player mno = do
-  drawBoard board
-  if mno == 9
-    then do putStrLn "Draw! Game Over!"
-            return ()
-    else do n <- getValidUserMove board
-            putStrLn "\n"
-            let nb = placeMove player n board
-            if gameOver nb
-              then do drawBoard nb
-                      putStrLn (player:" wins")
-                      return ()
-              else playGame nb (other player) (mno + 1)
+showScene :: Window -> DBoard -> Curses ()
+showScene w dboard = do
+  (r, c) <- screenSize
+  updateWindow w $ do
+    drawBorder Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+    drawMessages dboard
+    renderBoard r c dboard
+  render
+  event <- getEvent w (Just 0)
+  newBoard <- return $ execState (do boardEvent event
+                                     flipCursor 
+                                 ) dboard
+  case status newBoard of
+    Abandon -> return ()
+    _ -> do liftIO $ threadDelay $ 1000 * 100
+            showScene w newBoard
 
 main :: IO ()
-main = playGame getEmptyBoard 'x' 0
+main = do
+  hSetBinaryMode stdin True
+  hSetBuffering stdin NoBuffering
+  let dboard = getNewDBoard
+  runCurses $ do
+    setCBreak True
+    w <- defaultWindow
+    setKeypad w True
+    showScene w dboard
+  putStrLn "GoodBye!"
