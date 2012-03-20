@@ -71,7 +71,7 @@ updateBoard key dboard =
 
 makeMove :: DBoard -> DBoard
 makeMove dboard | isDrawn bd    = tdb' { status = Drawn }
-                | isGameOver bd = tdb' { status = Won }
+                | isWon bd = tdb' { status = Won }
                 | otherwise     = tdb' { turn = oturn }
   where tdb = dboard { board = bd }
         tdb' = tdb { cursor = cursor $ updateCursor (cursor tdb) True tdb }

@@ -4,7 +4,7 @@ module GameLogic
   getEmptyBoard,
   boardRep,
   drawBoard,
-  isGameOver,
+  isWon,
   isDrawn,
   placeMove,
   isValidMove,
@@ -14,7 +14,7 @@ module GameLogic
        where
 
 import           Control.Monad.State
-import           Data.List           (intersperse, transpose, findIndex)
+import           Data.List           (intersperse, transpose, findIndex, sort)
 import           Data.Maybe          (fromJust)
 
 newtype Board = Board { getBoard :: String }
@@ -52,8 +52,8 @@ drawBoard (Board board) = do
 allequal :: String -> Bool
 allequal s = (and $ map ((s!!0)==) s) && (s!!0 /= ' ')
 
-isGameOver :: Board -> Bool
-isGameOver (Board board) = or [hori, vert, d1, d2]
+isWon :: Board -> Bool
+isWon (Board board) = or [hori, vert, d1, d2]
   where sboard = getSBoard board
         hori = or $ map allequal sboard
         vert = or $ map allequal $ transpose sboard
@@ -61,7 +61,7 @@ isGameOver (Board board) = or [hori, vert, d1, d2]
         d2 = allequal $ [board !! 2, board !! 4, board !! 6]
 
 isDrawn :: Board -> Bool
-isDrawn board = (not $ isGameOver board) && (countSpace == 0)
+isDrawn board = (not $ isWon board) && (countSpace == 0)
   where countSpace = length $ filter (==' ') $ getBoard board
 
 placeMove :: Char -> Int -> Board -> Board
@@ -79,8 +79,27 @@ other 'o' = 'x'
 -- computer player
 --------------------------------------------------------------------------------
 getAIMove :: Board -> Int
-getAIMove (Board board) = fromJust $ findIndex (==' ') board
+getAIMove (Board board) = getBestMove (Board board) aiChar
   where xcount = length $ filter (=='x') board
         ocount = length $ filter (=='o') board
         aiChar = if xcount == ocount then 'x' else 'o'
+
+getBestMove :: Board -> Char -> Int
+getBestMove board c = snd $ getBestMove' board c
+
+getBestMove' :: Board -> Char -> (Int, Int)
+getBestMove' board c | length wonBoards > 0 = (1, fst $ head wonBoards)
+                     | length drawnBoards > 0 = (0, fst $ head drawnBoards)
+                     | otherwise = head $ (reverse.sort) myBestMoves
+  where bstr = getBoard board
+        spPos = map fst $ filter (\(x, y) -> y == ' ') $ zip [0..] bstr
+        putC n = (take n bstr) ++ [c] ++ (drop (n+1) bstr)
+        nextBoards = map (\x -> (x, Board $ putC x)) spPos
+        wonBoards = filter (\x -> isWon $ snd x)  nextBoards
+        drawnBoards = filter (\x -> isDrawn $ snd x) nextBoards
+        remBoards = filter (\x -> not (isWon (snd x) || isDrawn (snd x))) nextBoards
+        c' = other c
+        bestOppMoves = map (\x -> (getBestMove' (snd x) c', fst x)) remBoards
+        myBestMoves = map (\((s, om), p) -> (-s, p)) bestOppMoves
+  
 --------------------------------------------------------------------------------
