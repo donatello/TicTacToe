@@ -93,8 +93,7 @@ getBestMove' board c | length wonBoards > 0 = (1, fst $ head wonBoards)
                      | otherwise = head $ (reverse.sort) myBestMoves
   where bstr = getBoard board
         spPos = map fst $ filter (\(x, y) -> y == ' ') $ zip [0..] bstr
-        putC n = (take n bstr) ++ [c] ++ (drop (n+1) bstr)
-        nextBoards = map (\x -> (x, Board $ putC x)) spPos
+        nextBoards = map (\x -> (x, placeMove c x board)) spPos
         wonBoards = filter (\x -> isWon $ snd x)  nextBoards
         drawnBoards = filter (\x -> isDrawn $ snd x) nextBoards
         remBoards = filter (\x -> not (isWon (snd x) || isDrawn (snd x))) nextBoards
