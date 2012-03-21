@@ -1,8 +1,10 @@
-This toy program is just to learn Haskell.
+This toy program is just to learn Haskell. It pits an AI TicTacToe
+player against the user.
 
 The program requires the Haskell NCurses binding to be installed.
 
-To run the program just execute:
+To run the program just execute (assuming all dependencies are
+installed):
 
    $ ghc --make TicTacToe.hs
    $ ./TicTacToe
